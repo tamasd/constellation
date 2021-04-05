@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test>
+    <A>5</A>
+    <B>asdf</B>
+    <C>true</C>
+    <D>
+        <E>-2</E>
+        <F>-1.2</F>
+    </D>
+</test>
