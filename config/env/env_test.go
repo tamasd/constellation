@@ -42,7 +42,7 @@ type simpleData struct {
 }
 
 type invalidData struct {
-	f func()
+	F func()
 }
 
 func TestUnmarshaler_Unmarshal(t *testing.T) {

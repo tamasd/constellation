@@ -25,6 +25,7 @@ import (
 	"database/sql/driver"
 
 	gouuid "github.com/satori/go.uuid"
+	"github.com/tamasd/constellation/util"
 )
 
 type UUID [16]byte
@@ -45,7 +46,8 @@ func Generate(key []byte) UUID {
 
 func hmacsum(msg []byte, key []byte) []byte {
 	mac := hmac.New(sha256.New, key)
-	mac.Write(msg)
+	_, err := mac.Write(msg)
+	util.Must(err)
 	return mac.Sum(nil)
 }
 
