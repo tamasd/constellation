@@ -55,9 +55,6 @@ func (mtr *Registry) Create(typeName string) interface{} {
 }
 
 func (mtr *Registry) MessageType(v interface{}) string {
-	name := reflect.TypeOf(v).String()
-	if strings.HasPrefix(name, "*") {
-		name = name[1:]
-	}
+	name := strings.TrimPrefix(reflect.TypeOf(v).String(), "*")
 	return mtr.typeLookup[name]
 }
