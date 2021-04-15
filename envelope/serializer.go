@@ -21,14 +21,14 @@ package envelope
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"sync"
-
-	"github.com/pkg/errors"
 )
 
 const (
-	TypeHeaderName = "type"
+	TypeHeaderName        = "type"
+	MessageTypeHeaderName = "mtyp"
 
 	JsonType = "json"
 	GobType  = "gob"
@@ -36,7 +36,8 @@ const (
 )
 
 var (
-	ErrMessageTooSmall = errors.New("message is too small")
+	ErrMessageTooSmall    = errors.New("message is too small")
+	ErrInvalidMessageType = errors.New("invalid message type")
 )
 
 var (
@@ -49,18 +50,20 @@ var (
 )
 
 type Serializer struct {
+	registry    *Registry
 	codec       *Codec
 	defaultType string
 }
 
-func NewSerializer(codec *Codec, defaultType string) *Serializer {
+func NewSerializer(registry *Registry, codec *Codec, defaultType string) *Serializer {
 	return &Serializer{
+		registry:    registry,
 		codec:       codec,
 		defaultType: defaultType,
 	}
 }
 
-func (s *Serializer) Parse(msg []byte, v interface{}) (*Envelope, error) {
+func (s *Serializer) Parse(msg []byte) (*Envelope, error) {
 	split := findSplit(msg[:])
 	if split < 1 {
 		return nil, ErrMessageTooSmall
@@ -69,6 +72,11 @@ func (s *Serializer) Parse(msg []byte, v interface{}) (*Envelope, error) {
 	header, err := ParseHeaderFrom(bytes.NewBuffer(msg[:split]))
 	if err != nil {
 		return nil, err
+	}
+
+	v := s.registry.Create(header.Get(MessageTypeHeaderName))
+	if v == nil {
+		return nil, ErrInvalidMessageType
 	}
 
 	if err = s.getDecoder(header.Get(TypeHeaderName), bytes.NewBuffer(msg[split:])).Decode(v); err != nil {
@@ -84,6 +92,18 @@ func (s *Serializer) Serialize(e *Envelope) ([]byte, error) {
 		buf.Reset()
 		bufPool.Put(buf)
 	}()
+
+	if e.Header().Get(MessageTypeHeaderName) == "" {
+		if err := e.header.Set(MessageTypeHeaderName, s.registry.MessageType(e.body)); err != nil {
+			return nil, err
+		}
+	}
+
+	if e.Header().Get(TypeHeaderName) == "" {
+		if err := e.header.Set(TypeHeaderName, s.defaultType); err != nil {
+			return nil, err
+		}
+	}
 
 	_, err := e.Header().WriteTo(buf)
 	if err != nil {

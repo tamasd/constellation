@@ -21,10 +21,9 @@ package envelope
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 var (

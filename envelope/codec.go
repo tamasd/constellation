@@ -20,10 +20,17 @@
 package envelope
 
 import (
+	"compress/flate"
 	"encoding/gob"
 	"encoding/json"
 	"encoding/xml"
 	"io"
+
+	"github.com/tamasd/constellation/util"
+)
+
+const (
+	deflateCompressionLevel = 9
 )
 
 type Encoder interface {
@@ -32,6 +39,11 @@ type Encoder interface {
 
 type Decoder interface {
 	Decode(v interface{}) error
+}
+
+type Factory interface {
+	EncoderFactory
+	DecoderFactory
 }
 
 type EncoderFactory interface {
@@ -125,4 +137,27 @@ func (x *Xml) NewDecoder(r io.Reader) Decoder {
 
 func (x *Xml) NewEncoder(w io.Writer) Encoder {
 	return xml.NewEncoder(w)
+}
+
+type Flate struct {
+	dict      []byte
+	decorated Factory
+}
+
+func NewFlate(dict []byte, decorated Factory) *Flate {
+	return &Flate{
+		dict:      dict,
+		decorated: decorated,
+	}
+}
+
+func (f *Flate) NewEncoder(w io.Writer) Encoder {
+	fw, err := flate.NewWriterDict(w, deflateCompressionLevel, f.dict[:])
+	util.Must(err)
+
+	return f.decorated.NewEncoder(fw)
+}
+
+func (f *Flate) NewDecoder(r io.Reader) Decoder {
+	return f.decorated.NewDecoder(flate.NewReaderDict(r, f.dict))
 }

@@ -20,6 +20,10 @@
 package envelope_test
 
 import (
+	"bytes"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,36 +32,74 @@ import (
 
 func TestSerializationDeserialization(t *testing.T) {
 	table := []struct {
-		d          *data
-		serialized []byte
-		typ        string
+		name    string
+		d       *data
+		headers []string
+		body    []byte
+		typ     string
 	}{
-		{&data{5, "x"}, []byte("type:json\n\n{\"A\":5,\"B\":\"x\"}\n"), envelope.JsonType},
-		{&data{5, "x"}, []byte("type:xml\n\n<data><A>5</A><B>x</B></data>"), envelope.XmlType},
-		{&data{5, "x"}, []byte{0x74, 0x79, 0x70, 0x65, 0x3a, 0x67, 0x6f, 0x62, 0xa, 0xa, 0x1e, 0xff, 0x81, 0x3, 0x1, 0x1, 0x4, 0x64, 0x61, 0x74, 0x61, 0x1, 0xff, 0x82, 0x0, 0x1, 0x2, 0x1, 0x1, 0x41, 0x1, 0x4, 0x0, 0x1, 0x1, 0x42, 0x1, 0xc, 0x0, 0x0, 0x0, 0x8, 0xff, 0x82, 0x1, 0xa, 0x1, 0x1, 0x78, 0x0}, envelope.GobType},
+		{
+			"json",
+			&data{5, "x"},
+			[]string{"mtyp:data", "type:json"},
+			[]byte("{\"A\":5,\"B\":\"x\"}\n"),
+			envelope.JsonType,
+		},
+		{
+			"xml",
+			&data{5, "x"},
+			[]string{"mtyp:data", "type:xml"},
+			[]byte("<data><A>5</A><B>x</B></data>"),
+			envelope.XmlType,
+		},
+		{
+			"gob",
+			&data{5, "x"},
+			[]string{"mtyp:data", "type:gob"},
+			[]byte{0x1e, 0xff, 0x81, 0x3, 0x1, 0x1, 0x4, 0x64, 0x61, 0x74, 0x61, 0x1, 0xff, 0x82, 0x0, 0x1, 0x2, 0x1, 0x1, 0x41, 0x1, 0x4, 0x0, 0x1, 0x1, 0x42, 0x1, 0xc, 0x0, 0x0, 0x0, 0x8, 0xff, 0x82, 0x1, 0xa, 0x1, 0x1, 0x78, 0x0},
+			envelope.GobType,
+		},
 	}
 
 	s := serializer()
 
 	for _, row := range table {
-		h := envelope.NewHeader()
-		err := h.Set(envelope.TypeHeaderName, row.typ)
-		require.Nil(t, err)
-		e := envelope.NewEnvelope(h, row.d)
-		serialized, err := s.Serialize(e)
-		require.Nil(t, err)
+		t.Run(row.name, func(t *testing.T) {
+			h := envelope.NewHeader()
+			err := h.Set(envelope.TypeHeaderName, row.typ)
+			require.Nil(t, err)
+			e := envelope.NewEnvelope(h, row.d)
+			serialized, err := s.Serialize(e)
+			require.Nil(t, err)
 
-		require.Equal(t, row.serialized, serialized)
+			headers, body := parseSerialized(t, serialized)
+			require.Equal(t, row.headers, headers)
+			require.Equal(t, row.body, body)
 
-		deserializedData := &data{}
-		ed, err := s.Parse(row.serialized, deserializedData)
-		require.Nil(t, err)
+			ed, err := s.Parse(append([]byte(strings.Join(row.headers, "\n")+"\n\n"), row.body...))
+			require.Nil(t, err)
 
-		require.Equal(t, e, ed)
+			require.Equal(t, e, ed)
+		})
 	}
 }
 
+func parseSerialized(t *testing.T, serialized []byte) ([]string, []byte) {
+	idx := bytes.Index(serialized, []byte{0xa, 0xa})
+	require.GreaterOrEqual(t, idx, 0)
+
+	headerBytes, body := serialized[:idx], serialized[idx+2:]
+	header := strings.Split(string(headerBytes), "\n")
+
+	sort.Strings(header)
+
+	return header, body
+}
+
 func serializer() *envelope.Serializer {
+	registry := envelope.NewRegistry()
+	registry.Register("data", reflect.TypeOf(data{}))
+
 	codec := envelope.NewCodec()
 
 	js := envelope.NewJson()
@@ -72,7 +114,7 @@ func serializer() *envelope.Serializer {
 	codec.AddEncoder(envelope.XmlType, xml)
 	codec.AddDecoder(envelope.XmlType, xml)
 
-	return envelope.NewSerializer(codec, envelope.JsonType)
+	return envelope.NewSerializer(registry, codec, envelope.JsonType)
 }
 
 type data struct {
