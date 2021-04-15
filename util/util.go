@@ -66,7 +66,8 @@ func RandomHexString(length int) string {
 	// TODO sync.Pool?
 	buf := make([]byte, buflen)
 
-	_, _ = io.ReadFull(rand.Reader, buf)
+	_, err := io.ReadFull(rand.Reader, buf)
+	Must(err)
 
 	return hex.EncodeToString(buf)[:length]
 }

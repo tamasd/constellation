@@ -48,7 +48,7 @@ type Constraint struct {
 func LoadConstraints(conn Connection, relname, prefix string) ([]Constraint, error) {
 	var args []interface{}
 	constraintQuery := `
-		SELECT con.conname, con.contype::text
+		SELECT con.conname AS name, con.contype::text AS constraint_type
 		FROM pg_catalog.pg_constraint con
 		INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
 		INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = con.connamespace
@@ -57,7 +57,7 @@ func LoadConstraints(conn Connection, relname, prefix string) ([]Constraint, err
 			rel.relname = $1`
 
 	indexQuery := `
-		SELECT idx.relname as index_name, 'iu'
+		SELECT idx.relname AS name, 'iu' AS constaint_type
 		FROM pg_index pgi
 		INNER JOIN pg_class idx ON idx.oid = pgi.indexrelid
 		INNER JOIN pg_namespace insp ON insp.oid = idx.relnamespace
@@ -66,7 +66,8 @@ func LoadConstraints(conn Connection, relname, prefix string) ([]Constraint, err
 		WHERE
 			pgi.indisunique AND
 			tnsp.nspname = current_schema() AND
-			tbl.relname = $1`
+			tbl.relname = $1 AND
+			idx.relname NOT IN (SELECT name FROM constraint_query)`
 
 	if prefix != "" {
 		constraintQuery += ` AND
@@ -83,7 +84,13 @@ func LoadConstraints(conn Connection, relname, prefix string) ([]Constraint, err
 		}
 	}
 
-	rows, err := conn.Query(constraintQuery+" UNION "+indexQuery, args...)
+	rows, err := conn.Query(`
+		WITH
+			constraint_query AS (`+constraintQuery+`),
+			index_query AS (`+indexQuery+`),
+			union_query AS (SELECT * FROM constraint_query UNION SELECT * FROM index_query)
+		SELECT * FROM union_query ORDER BY name
+	`, args...)
 	if err != nil {
 		return nil, err
 	}

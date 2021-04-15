@@ -177,8 +177,7 @@ func (d *transactionFactoryLoggerDB) Begin() (Transaction, error) {
 			"duration":       time.Since(start),
 		})
 		if err != nil {
-			l = l.WithError(err)
-			l.Debugln(msg)
+			l.WithError(err).Warnln(msg)
 			return nil, err
 		}
 		l.Debugln(msg)
@@ -247,30 +246,24 @@ func cleanSQL(query string) string {
 //     t.Cleanup(cleanup)
 func TestConnect(dbUrl string) (Connection, func()) {
 	conn, err := Connect(dbUrl)
-	if err != nil {
-		panic(err)
-	}
+	util.Must(err)
+
 	conn.SetConnMaxLifetime(120 * time.Second)
 	conn.SetMaxIdleConns(1)
 	conn.SetMaxOpenConns(1)
 
 	schema := "ct_" + strings.ToLower(util.RandomHexString(8))
 	_, err = conn.Exec("CREATE SCHEMA " + schema)
-	if err != nil {
-		panic(err)
-	}
+	util.Must(err)
 	setSearchPath(conn, schema)
 
 	return conn, func() {
 		_, err := conn.Exec("DROP SCHEMA " + schema + " CASCADE;")
-		if err != nil {
-			panic(err)
-		}
+		util.Must(err)
 	}
 }
 
 func setSearchPath(conn Connection, schema string) {
-	if _, err := conn.Exec("SET search_path TO " + schema + ", public;"); err != nil {
-		panic(err)
-	}
+	_, err := conn.Exec("SET search_path TO " + schema + ", public;")
+	util.Must(err)
 }

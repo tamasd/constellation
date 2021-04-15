@@ -36,7 +36,7 @@ func TestUUID(t *testing.T) {
 	require.True(t, gen.Verify(key))
 
 	require.Equal(t, uint8(4), gen.Version())
-	require.Equal(t, uint8(gouuid.VariantRFC4122), gen.Variant())
+	require.Equal(t, gouuid.VariantRFC4122, gen.Variant())
 
 }
 

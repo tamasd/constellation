@@ -178,7 +178,7 @@ func updateSchema(logger logger.Logger, conn Connection, provider MigrationsProv
 
 	defer func() {
 		if err = MaybeRollback(tx); err != nil {
-			logger.Errorln(err)
+			logger.WithError(err).Errorln("failed to roll back transaction")
 		}
 	}()
 
@@ -202,5 +202,5 @@ func updateSchema(logger logger.Logger, conn Connection, provider MigrationsProv
 	}
 	logger.Debugln("migrations table updated")
 
-	return MaybeCommit(conn)
+	return MaybeCommit(tx)
 }
